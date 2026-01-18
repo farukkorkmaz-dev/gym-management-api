@@ -37,4 +37,4 @@ A professional backend API developed with **Python** and **FastAPI** to manage g
 4. **Denial:** Try "Check-in" a third time. You should see an **"Insufficient balance"** error.
 
 ---
-*Developed by [Your Name]*
+*Developed by faruk korkmaz (farukkorkmaz-dev)*
