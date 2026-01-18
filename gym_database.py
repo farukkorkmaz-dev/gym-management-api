@@ -1,108 +1,71 @@
 import sqlite3
-from typing import List, Tuple, Optional
+from datetime import datetime
 
 class Database:
-    def __init__(self, db_name: str = "gym.db"):
-        self.db_name = db_name
-        self.init_database()
+    def __init__(self):
+        self.connect_db()
 
-    def get_connection(self):
-        """Veritabanı bağlantısını aç"""
-        return sqlite3.connect(self.db_name)
-
-    def init_database(self):
-        """Veritabanı tablolarını oluştur"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
-        # Members tablosu
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS members (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                balance REAL NOT NULL DEFAULT 0
-            )
-        ''')
-
-        # Activities tablosu
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS activities (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                member_id INTEGER NOT NULL,
-                action TEXT NOT NULL,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (member_id) REFERENCES members(id)
-            )
-        ''')
-
-        conn.commit()
-        conn.close()
-
-    def add_member(self, name: str, balance: float) -> int:
-        """Yeni üye ekle"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO members (name, balance) VALUES (?, ?)', (name, balance))
-        conn.commit()
-        new_id = cursor.lastrowid
-        conn.close()
-        return new_id
-
-    def get_members(self) -> List[Tuple]:
-        """Tüm üyeleri getir"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT id, name, balance FROM members')
-        members = cursor.fetchall()
-        conn.close()
-        return members
-
-    def get_member_by_id(self, member_id: int) -> Optional[Tuple]:
-        """ID'ye göre üye getir"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT id, name, balance FROM members WHERE id = ?', (member_id,))
-        member = cursor.fetchone()
-        conn.close()
-        return member
-
-    def delete_member(self, member_id: int):
-        """Üyeyi sil"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM members WHERE id = ?', (member_id,))
-        conn.commit()
-        conn.close()
-
-    def update_balance(self, member_id: int, new_balance: float):
-        """Üye bakiyesini güncelle"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('UPDATE members SET balance = ? WHERE id = ?', (new_balance, member_id))
-        conn.commit()
-        conn.close()
-
-    def add_activity(self, member_id: int, action: str):
-        """Aktivite kaydı ekle"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO activities (member_id, action) VALUES (?, ?)', (member_id, action))
-        conn.commit()
-        conn.close()
-
-    def get_statistics(self) -> Tuple[int, float]:
-        """İstatistikleri getir (aktif üye sayısı, toplam bakiye)"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
+    def connect_db(self):
+        # We are connecting to the database
+        self.connection = sqlite3.connect("gym.db", check_same_thread=False)
+        self.cursor = self.connection.cursor()
         
-        # Aktif üye sayısı
-        cursor.execute('SELECT COUNT(*) FROM members')
-        count = cursor.fetchone()[0]
+        # 1. MEMBERS TABLE (Replaced 'isim' with 'name')
+        self.cursor.execute("""CREATE TABLE IF NOT EXISTS members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            balance REAL
+        )""")
         
-        # Toplam bakiye
-        cursor.execute('SELECT SUM(balance) FROM members')
-        result = cursor.fetchone()[0]
-        revenue = result if result is not None else 0
+        # 2. ACTIVITY LOG TABLE
+        self.cursor.execute("""CREATE TABLE IF NOT EXISTS activity_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            member_id INTEGER,
+            action TEXT,
+            timestamp TEXT
+        )""")
         
-        conn.close()
-        return count, revenue
+        self.connection.commit()
+
+    def add_member(self, name, balance):
+        query = "INSERT INTO members (name, balance) VALUES (?, ?)"
+        self.cursor.execute(query, (name, balance))
+        self.connection.commit()
+        return self.cursor.lastrowid
+
+    def get_members(self):
+        self.cursor.execute("SELECT * FROM members")
+        return self.cursor.fetchall()
+
+    def get_member_by_id(self, member_id):
+        self.cursor.execute("SELECT * FROM members WHERE id = ?", (member_id,))
+        return self.cursor.fetchone()
+
+    def update_balance(self, member_id, new_balance):
+        query = "UPDATE members SET balance = ? WHERE id = ?"
+        self.cursor.execute(query, (new_balance, member_id))
+        self.connection.commit()
+
+    def delete_member(self, member_id):
+        self.cursor.execute("DELETE FROM members WHERE id = ?", (member_id,))
+        self.connection.commit()
+
+    def add_activity(self, member_id, action):
+        # Getting current time in format: YYYY-MM-DD HH:MM:SS
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        query = "INSERT INTO activity_log (member_id, action, timestamp) VALUES (?, ?, ?)"
+        self.cursor.execute(query, (member_id, action, current_time))
+        self.connection.commit()
+    
+    def get_statistics(self):
+        # Count total members
+        self.cursor.execute("SELECT COUNT(*) FROM members")
+        total_members = self.cursor.fetchone()[0]
+        
+        # Sum total balance (Total revenue potential)
+        self.cursor.execute("SELECT SUM(balance) FROM members")
+        result = self.cursor.fetchone()[0]
+        total_balance = 0 if result is None else result
+        
+        return total_members, total_balance
